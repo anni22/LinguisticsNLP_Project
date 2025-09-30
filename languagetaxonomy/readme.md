@@ -12,9 +12,11 @@
 *   `taxonomy_all7500_fullnames.csv`: Contains the taxonomy for all 7500 languages, with full language names and their assigned clusters.
 *   `taxonomy_all7500_tags.csv`: Contains the taxonomyfor all 7500 languages, using ISO tags and their assigned clusters.
 *   `taxonomy_original_fullnames.csv`: Contains the taxonomy for 333 languages with resources, with full language names and their assigned clusters.
-*   `taxonomy_original_tags.csv`: Contains the taxonomyfor for 333 languages with resources, using ISO tags and their assigned clusters.
+*   `taxonomy_original_tags.csv`: Contains the taxonomy for for 333 languages with resources, using ISO tags and their assigned clusters.
 *   `DatasetsPerLanguage.xlsx`: Contains detailed information about data processing and language name standardisation.
 *   `lang2tax_MED_suggestions.txt`: Results of the unsuccessful attempt to standardide languge names from the Joshi et al.'s (2020) taxonomy using MED.
+
+### ISO639-3 files
 *   `iso-639-3-macrolanguages.tab`: A file containing information about ISO 639-3 macrolanguages and the languages that constitute them.
 *   `languagecodes.csv`: A list of ISO 639-3 tags and full language names.
-*   `language_codes_ISO639-3_with_macros.csv`: A list of ISO 639-3 tags with macrolanguages replacing individual languages whenever they are given.
+*   `language_codes_ISO639-3_with_macros.csv`: A list of all ISO 639-3 tags with macrolanguages replacing individual languages if a language belongs to a macrolanguage.
