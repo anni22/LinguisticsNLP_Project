@@ -5,7 +5,7 @@ from collections import defaultdict
 from math import log
 
 # Load data
-df = pd.read_csv("AllVenues_LanguagePapers25.csv")
+df = pd.read_csv("AllVenues_LanguagePapers.csv")
 
 # Fix empty language mentions by assuming English
 def fix_empty_languages(languages_str):
@@ -18,34 +18,40 @@ def fix_empty_languages(languages_str):
 
 df['languages'] = df['languages'].apply(fix_empty_languages)
 
-conferences = ["ACL", "CL", "COLING", "CONLL", "EACL", "EMNLP", "LREC",
-               "NAACL", "SEMEVAL", "TACL", "WS"]
+conferences = ["ACL", "NAACL", "EMNLP", "EACL", "COLING",
+               "CL", "WS", "CONLL", "SEMEVAL", "LREC"]
 
-# For entropy calculation
+# Labels (a), (b), (c)...
+subplot_labels = [f"({chr(97+i)})" for i in range(len(conferences))]
+
+# Entropy calculation
 def entropy(prob_dist):
-    """Calculate entropy for a probability distribution array"""
-    return -sum(p * log(p) for p in prob_dist if p > 0)
+    terms = []
+    for p in prob_dist:
+        if p > 0:
+            terms.append(p * log(p))
 
-# Extract all languages from the dataset to get language index
-all_languages = sorted(set(lang for langs in df['languages'] for lang in langs)) #should I maybe add all languages here that did not get mention once in any conference paper?!!
+    total = sum(terms)
+    result = -total
+    return result
+
+# Extract all languages from the dataset
+all_languages = sorted(set(lang for langs in df['languages'] for lang in langs))
 lang_to_idx = {lang: idx for idx, lang in enumerate(all_languages)}
 
-# structure to hold entropy results: {conference: {year: entropy_value}}
+# Structure to hold entropy results: {conference: {year: entropy_value}}
 entropy_results = defaultdict(dict)
 
 # Group by conference and year
 grouped = df.groupby(['venue', 'year'])
 
+# Main loop to fill entropy values
 for (conf, year), group in grouped:
     if conf not in conferences:
         continue
     
-    # Number of papers in this conf-year
     P = len(group)
     L = len(all_languages)
-    
-    # Build binary matrix M_{P x L}
-    # Rows = papers, Columns = languages
     M = np.zeros((P, L), dtype=int)
     
     for i, langs in enumerate(group['languages']):
@@ -53,22 +59,18 @@ for (conf, year), group in grouped:
             if lang in lang_to_idx:
                 M[i, lang_to_idx[lang]] = 1
     
-    # Sum across papers for each language: occurrence count S_j
     S = M.sum(axis=0)
-    
-    # Normalize to get probability distribution S' = S / total mentions
     total_mentions = S.sum()
     if total_mentions == 0:
-        entropy_val = 0.0  # no languages mentioned means no entropy
+        entropy_val = 0.0
     else:
         prob_dist = S / total_mentions
         entropy_val = entropy(prob_dist)
     
     entropy_results[conf][year] = entropy_val
 
-# Convert results to DataFrame for easier plotting/analysis
+# Convert results to DataFrame
 entropy_df = []
-
 for conf in conferences:
     years = sorted(entropy_results[conf].keys())
     for y in years:
@@ -76,35 +78,35 @@ for conf in conferences:
 
 entropy_df = pd.DataFrame(entropy_df)
 
+# -------------------
+# Plot: 5 x 2 layout
+# -------------------
 
-# Save entropy data for further comparison if needed
-entropy_df.to_csv("Language_Occurrence_Entropy.csv", index=False)
-print("Entropy data saved to Language_Occurrence_Entropy.csv")
+fig, axes = plt.subplots(2, 5, figsize=(18, 7), sharey=True)
+axes = axes.flatten()
 
-unique_languages = sorted(set(lang for langs in df['languages'] for lang in langs))
-print(f"Total unique languages mentioned (including assumed 'english'): {len(unique_languages)}")
-print(f"Languages: {', '.join(unique_languages)}")
-
-
-# Optional: Plot entropy over years per conference (like Joshi et al.'s Figure 4)
-import matplotlib.cm as cm
-
-plt.figure(figsize=(12, 8))
-
-# Use tab20 colormap for distinct colors
-colors = cm.get_cmap('tab20', len(conferences))
+plot_color = "deepskyblue"
 
 for idx, conf in enumerate(conferences):
+    ax = axes[idx]
     sub_df = entropy_df[entropy_df['conference'] == conf]
     if not sub_df.empty:
-        plt.plot(sub_df['year'], sub_df['entropy'], marker='o', label=conf, color=colors(idx))
+        ax.plot(sub_df['year'], sub_df['entropy'], 
+                marker='o', markersize=2,
+                color=plot_color, linewidth=1)
+        ax.set_title(f"{subplot_labels[idx]} {conf}", fontsize=10)
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.set_xlim(entropy_df['year'].min(), 2024)
+        ax.set_ylim(entropy_df['entropy'].min(), entropy_df['entropy'].max())
+        ax.set_xlabel("Year")
 
-plt.xlabel("Year")
-plt.ylabel("Language Occurrence Entropy")
-plt.title("Language Occurrence Entropy by Conference (2020–2025)")
-plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', title="Conference")
-plt.grid(True, linestyle='--', alpha=0.5)
-plt.tight_layout()
-output_file = "language_entropy_plot_all_papers.png"
-plt.savefig(output_file, dpi=300, bbox_inches='tight')
-print(f"Plot saved as: {output_file}")
+# Remove unused axes
+for j in range(len(conferences), len(axes)):
+    fig.delaxes(axes[j])
+
+fig.suptitle("Language Occurrence Entropy Over the Years by Conference", fontsize=14)
+fig.text(0.04, 0.5, "Entropy", va="center", rotation="vertical", fontsize=12)
+
+plt.tight_layout(rect=[0.05, 0.05, 1, 0.93])
+plt.savefig("language_entropy_subplots_5x2_lightblue.png", dpi=300)
+plt.show()
