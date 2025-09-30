@@ -2,7 +2,7 @@ import pandas as pd
 import ast
 
 # Load data
-df = pd.read_csv("AllVenues_LanguagePapers25.csv")
+df = pd.read_csv("AllVenues_LanguagePapers.csv")
 
 # Fix empty language mentions by assuming English
 def fix_empty_languages(langs_str):
@@ -15,25 +15,27 @@ def fix_empty_languages(langs_str):
 
 df['languages'] = df['languages'].apply(fix_empty_languages)
 
-# Convert string representation of list back to actual list if needed
 if isinstance(df.loc[0, 'languages'], str):
     df['languages'] = df['languages'].apply(ast.literal_eval)
 
-# Load language taxonomy, taxonomy format: language,class_number (e.g., "iban,0")
-taxonomy_file = "languageTaxonomy_cleaned.txt"
+# Get taxonomy
+taxonomy_file = "languages_clean2.csv"
 
-lang_to_class = {}
-with open(taxonomy_file, 'r', encoding='utf-8') as f:
-    for line in f:
-        parts = line.strip().split(",")
-        if len(parts) == 2:
-            lang = parts[0].lower()
-            lang_class = parts[1].strip()  # string class, e.g. "0", "1"
-            lang_to_class[lang] = lang_class
+# Load the CSV
+taxonomy = pd.read_csv(taxonomy_file, sep=';')
 
-# Get class of a language from taxonomy
+# Dictionary mapping: language -> class
+lang_to_class = {
+    str(lang).strip().lower(): str(cls).strip()
+    for lang, cls in zip(taxonomy["Full Language Name"], taxonomy["Class"])
+    if pd.notnull(lang) and pd.notnull(cls)
+}
+
+print(f"Loaded {len(lang_to_class)} languages into dictionary.")
+
+# Get class of a language
 def get_lang_class(lang):
-    return lang_to_class.get(lang.lower())
+    return lang_to_class.get(str(lang).lower())
 
 # Create dataframe with all single language mentions, to which conference/year it belonged to and its class
 records = []
@@ -50,7 +52,7 @@ for idx, row in df.iterrows():
 
 lang_df = pd.DataFrame(records)
 
-# Calculate frequencies of each language per venue (conference) --> how often does a language appear in a conference?
+# How often does a language appear in a conference?
 freqs = lang_df.groupby(['venue', 'language']).size().reset_index(name='count')
 
 # Add class column
@@ -61,7 +63,7 @@ mrr_results = []
 for venue in freqs['venue'].unique():
     venue_data = freqs[freqs['venue'] == venue]
 
-    # Assign global rank to ALL languages in the venue by descending frequency
+    # Assign rank (within a conference) to all languages in the venue by descending frequency
     venue_data = venue_data.sort_values('count', ascending=False).reset_index(drop=True)
     venue_data['global_rank'] = venue_data.index + 1
 
@@ -85,7 +87,7 @@ for venue in freqs['venue'].unique():
 
 mrr_df = pd.DataFrame(mrr_results)
 
-# Pivot to have venues as rows, classes as columns
+# Reshape to have venues as rows, classes as columns
 pivot_table = mrr_df.pivot(index='venue', columns='class', values='inverse_mrr')
 
 # Sort rows and columns alphabetically/increasing
