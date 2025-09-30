@@ -1,32 +1,24 @@
-#what happens with papers that don't have two columns?? e.g. COLING 2012
-
-#cleaned the following languages from cleaned taxonomy file: #tem, au, gan, ido, mono, wu, mon, fur, fore, mor, bilin, ful, ding, chang, orig, mae, pare, ko, broken, thompson, dong, ao, aka
-
-
-#handle languages with hyphens correctly in the regex pattern
-#Try different paper length extraxted (2) (10)
-
 from acl_anthology import Anthology
 import os
 import pandas as pd
 from tqdm import tqdm
 import re
-import fitz  # PyMuPDF
+import fitz
 import requests
 import io
 from collections import defaultdict
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 # -------------------
 # Paths
 # -------------------
-acl_path = "/Users/annikaspirgath/Master Heidelberg/LinguisticsNLP/Final_Project/acl-anthology"
+acl_path = "/Users/annikaspirgath/Master Heidelberg/LinguisticsNLP/Final_Project/GitHub/LinguisticsNLP_Project/acl-anthology"
 data_dir = os.path.join(acl_path, "data")
 taxonomy_file = os.path.join(
-    "/Users/annikaspirgath/Master Heidelberg/LinguisticsNLP/Final_Project",
-    "languageTaxonomy_cleaned.txt"
+    "/Users/annikaspirgath/Master Heidelberg/LinguisticsNLP/Final_Project/GitHub/LinguisticsNLP_Project",
+    "languages_clean2.csv"
 )
 
 # -------------------
@@ -51,21 +43,22 @@ def get_venue(p):
     else:
         return None
 
-# -------------------
+# ----------------------
 # Load language taxonomy
-# -------------------
+# ----------------------
 languages = []
-with open(taxonomy_file, "r", encoding="utf-8") as f:
-    for line in f:
-        lang = line.strip().split(",")[0].lower().replace("-", "") #so smart deleting all hyphens?
-        if lang:
-            languages.append(lang)
+df = pd.read_csv(taxonomy_file, sep=';')
+languages = [str(lang).strip().lower() for lang in df["Full Language Name"] if pd.notnull(lang)]
+languages = list(set(languages))
 
-languages_lower = [lang.lower() for lang in languages if lang]
+print(f"✅ Loaded {len(languages)} unique languages from taxonomy.")
 
-#regular expression that is used later to find language mentions
+# ----------------------------
+# Define Patterns and Keywords
+# ----------------------------
+
 lang_pattern = re.compile(
-    r'\b(' + '|'.join(map(re.escape, languages_lower)) + r')\b',
+    r'\b(' + '|'.join(map(re.escape, languages)) + r')\b',
     flags=re.IGNORECASE
 ) 
 
@@ -82,9 +75,9 @@ def mentions_any_pattern(text):
         return False
     return any(regex.search(text) for regex in patterns.values())
 
-# -------------------
+# -----------------------------------------
 # Setup persistent session with retry logic
-# -------------------
+# -----------------------------------------
 session = requests.Session()
 retries = Retry(
     total=5,
@@ -96,38 +89,72 @@ adapter = HTTPAdapter(max_retries=retries)
 session.mount("https://", adapter)
 session.mount("http://", adapter)
 
-# -------------------
-# PDF extraction helpers
-# -------------------
-def extract_left_column_first_page(doc):
-    """Return left column text from first page only"""
+# -------------------------------------
+# Layout detection + extraction helpers
+# -------------------------------------
+def detect_layout(page, threshold=100):
+    """Detect whether a page is single- or double-column."""
+    blocks = page.get_text("blocks")
+    if not blocks:
+        return "unknown"
+
+    x0s = [b[0] for b in blocks]
+    if not x0s:
+        return "unknown"
+
+    unique_x0s = sorted(set(int(x) for x in x0s))
+    if len(unique_x0s) <= 1:
+        return "single"
+
+    diffs = [b - a for a, b in zip(unique_x0s, unique_x0s[1:])]
+    max_gap = max(diffs) if diffs else 0
+
+    return "double" if max_gap > threshold else "single"
+
+def extract_first_page_text(doc):
+    """Return text from first page depending on detected layout."""
     try:
         page = doc[0]
+        layout = detect_layout(page)
         blocks = page.get_text("blocks")
         if not blocks:
-            return None  # None means extraction failed
-        x0s = [b[0] for b in blocks]
-        median_x0 = sorted(x0s)[len(x0s)//2]
-        left_blocks = [b[4] for b in blocks if b[0] <= median_x0]
-        return " ".join(left_blocks) if left_blocks else None
-    except Exception:
-        return None
+            return None, layout
 
-def extract_text_pymupdf(pdf_bytes, max_pages=5):
-    """Extract text from first max_pages, column-aware"""
+        if layout == "double":
+            x0s = [b[0] for b in blocks]
+            median_x0 = sorted(x0s)[len(x0s)//2]
+            left_blocks = [b[4] for b in blocks if b[0] <= median_x0]
+            return (" ".join(left_blocks) if left_blocks else None), layout
+        else:
+            blocks.sort(key=lambda b: (b[1], b[0]))
+            return " ".join([b[4] for b in blocks]), layout
+    except Exception:
+        return None, "unknown"
+
+def extract_text_pymupdf(pdf_bytes, max_pages=4):
+    """Extract text from first max_pages, column-aware."""
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         text_pages = []
         for i, page in enumerate(doc):
             if i >= max_pages:
                 break
+            layout = detect_layout(page)
             blocks = page.get_text("blocks")
             if not blocks:
                 continue
-            blocks.sort(key=lambda b: (b[0], b[1]))
-            page_text = " ".join([b[4] for b in blocks])
+            if layout == "double":
+                x0s = [b[0] for b in blocks]
+                median_x0 = sorted(x0s)[len(x0s)//2]
+                blocks.sort(key=lambda b: (b[1], b[0]))
+                left = " ".join([b[4] for b in blocks if b[0] <= median_x0])
+                right = " ".join([b[4] for b in blocks if b[0] > median_x0])
+                page_text = left + " " + right
+            else:
+                blocks.sort(key=lambda b: (b[1], b[0]))
+                page_text = " ".join([b[4] for b in blocks])
             text_pages.append(page_text)
-        return "\n".join(text_pages) if text_pages else None
+        return " ".join(text_pages) if text_pages else None
     except Exception:
         return None
 
@@ -141,32 +168,34 @@ def fetch_and_parse_pdf(paper_id, url):
     except Exception:
         return paper_id, None, None
 
-# ------------------------------
-# Clean extracted text from pdf (so that less gibberish is matched to real languages)
-# ------------------------------
+# ---------------------
+# Clean extracted text
+# ---------------------
+
 def clean_text_for_language_matching(text):
-    text = re.split(r'\nReferences\b|\nBibliography\b', text, flags=re.IGNORECASE)[0]
+    
+    # Remove hyphen + line break (merge words)
+    text = re.sub(r'-[\r\n]+', '', text)
+    # Replace remaining line breaks with space
+    text = re.sub(r'[\r\n]+', ' ', text)
+
     text = re.sub(r'\b[\w\.-]+@[\w\.-]+\.\w+\b', ' ', text)
-    #text = re.sub(r'\b(university|college|hospital|institute|lab|department|press)\b',
-                  #' ', text, flags=re.IGNORECASE)
-    text = re.sub(r'[\n\r]', ' ', text)
-    text = text.replace('-', '') #delete hyphen so smart?
     text = re.sub(r'\s+', ' ', text)
+    
     return text.lower()
 
-def extract_abstract_snippet(left_col_text, window=150):
-    """Find the word 'abstract' and return ~window words after it"""
-    m = re.search(r'\babstract\b', left_col_text, re.IGNORECASE)
+def extract_abstract_snippet(text, window=150):
+    """Find 'abstract' and return ~window words after it."""
+    m = re.search(r'\babstract\b', text, re.IGNORECASE)
     if not m:
         return None
-    after_text = left_col_text[m.end():]
+    after_text = text[m.end():]
     words = after_text.split()
-    snippet = " ".join(words[:window])
-    return snippet
+    return " ".join(words[:window])
 
-# -------------------
-# Main processing loop
-# -------------------
+# -----------------------
+# Get all relevant Papers
+# -----------------------
 print("\nFiltering papers across all target conferences...")
 papers_to_process = []
 papers_to_fetch = []
@@ -198,17 +227,14 @@ for p in anthology.papers():
 print(f"Selected papers: {len(papers_to_process)}")
 print(f"Papers needing full text download: {len(papers_to_fetch)}")
 
-# -------------------
-# Download PDFs
-# -------------------
+# ----------------------
+# Download PDFs parallel
+# ----------------------
 pdf_docs = {}
 pdf_bytes_map = {}
 
 with ThreadPoolExecutor(max_workers=5) as executor:
-    # Submit all fetch tasks
     futures = [executor.submit(fetch_and_parse_pdf, pid, url) for pid, url in papers_to_fetch]
-    
-    # Wrap futures in tqdm for a clean progress bar
     for future in tqdm(futures, desc="Downloading PDFs", unit="pdf"):
         pid, pdf_bytes, doc = future.result()
         if pdf_bytes:
@@ -216,21 +242,20 @@ with ThreadPoolExecutor(max_workers=5) as executor:
         if doc:
             pdf_docs[pid] = doc
 
-# -------------------
-# Process papers
-# -------------------
+# ---------------
+# Main Processing
+# ---------------
 stats = defaultdict(lambda: {
     "papers": 0,
     "missing_abs": 0,
     "missing_id": 0,
     "fulltext_requested": 0,
     "fulltext_missing": 0,         
-    "no_abstract_keyword_found": 0,  # subcategory of fulltext_missing
-    "empty_text_extraction": 0       # subcategory of fulltext_missing
+    "no_abstract_keyword_found": 0,
+    "empty_text_extraction": 0
 })
 
-papers_data = []
-fulltext_missing_records = []   # track problematic papers
+papers_data = [] 
 
 for p, venue, abstract_text, needs_full_text in tqdm(papers_to_process, desc="Processing papers"):
     stats[venue]["papers"] += 1
@@ -242,46 +267,45 @@ for p, venue, abstract_text, needs_full_text in tqdm(papers_to_process, desc="Pr
 
     extraction_case = None
     full_text_checked = abstract_text
+    layout_detected = "unknown"
 
     if needs_full_text and p.id in pdf_docs:
         stats[venue]["fulltext_requested"] += 1
         doc = pdf_docs[p.id]
         pdf_bytes = pdf_bytes_map[p.id]
 
-        # Case A: Abstract exists
         if abstract_text.strip():
             if mentions_any_pattern(abstract_text):
-                pages_text = extract_text_pymupdf(pdf_bytes, max_pages=5)
-                if pages_text is None:  # failed extraction
+                pages_text = extract_text_pymupdf(pdf_bytes, max_pages=4)
+                if pages_text is None:
                     full_text_checked = abstract_text
                     extraction_case = "empty_text_extraction"
                 else:
                     full_text_checked = abstract_text + "\n" + pages_text
-                    extraction_case = "abstract_plus_5pages"
+                    extraction_case = "abstract_plus_4pages"
+                try:
+                    layout_detected = detect_layout(doc[0])
+                except Exception:
+                    layout_detected = "unknown"
             else:
                 full_text_checked = abstract_text
                 extraction_case = "abstract_only"
-
-        # Case B: No abstract -> try snippet
         else:
-            left_col_text = extract_left_column_first_page(doc)
-
-            if left_col_text is None:  # extraction failed
+            first_page_text, layout_detected = extract_first_page_text(doc)
+            if first_page_text is None:
                 full_text_checked = ""
                 extraction_case = "empty_text_extraction"
-
             else:
-                snippet = extract_abstract_snippet(left_col_text, window=150)
-
+                snippet = extract_abstract_snippet(first_page_text, window=150)
                 if snippet:
                     if mentions_any_pattern(snippet):
-                        pages_text = extract_text_pymupdf(pdf_bytes, max_pages=5)
-                        if pages_text is None:  # failed extraction
+                        pages_text = extract_text_pymupdf(pdf_bytes, max_pages=4)
+                        if pages_text is None:
                             full_text_checked = snippet
                             extraction_case = "empty_text_extraction"
                         else:
                             full_text_checked = snippet + "\n" + pages_text
-                            extraction_case = "abstract_missing_snippet_plus_5pages"
+                            extraction_case = "abstract_missing_snippet_plus_4pages"
                     else:
                         full_text_checked = snippet
                         extraction_case = "abstract_missing_snippet_only"
@@ -289,57 +313,40 @@ for p, venue, abstract_text, needs_full_text in tqdm(papers_to_process, desc="Pr
                     full_text_checked = ""
                     extraction_case = "no_abstract_keyword_found"
 
-        # Track missing full text cases
         if not full_text_checked.strip():
             stats[venue]["fulltext_missing"] += 1
-
             if extraction_case == "no_abstract_keyword_found":
                 stats[venue]["no_abstract_keyword_found"] += 1
                 reason = "no_abstract_keyword_found"
             else:
                 stats[venue]["empty_text_extraction"] += 1
                 reason = "empty_text_extraction"
+          
 
-            fulltext_missing_records.append({
-                "id": p.id,
-                "year": p.year,
-                "venue": venue,
-                "title": p.title,
-                "url": f"https://aclanthology.org/{p.id}.pdf",
-                "reason": reason
-            })
-
-    # Case C: No full text needed but abstract exists
     elif abstract_text.strip():
         extraction_case = "abstract_only"
 
-    # Clean and match languages
     text_clean = clean_text_for_language_matching(full_text_checked)
     matches = set(lang_pattern.findall(f" {text_clean} "))
 
     papers_data.append({
         "id": p.id,
         "title": p.title,
-        "authors": [a.name for a in p.authors],
         "year": int(p.year),
         "venue": venue,
         "abstract": abstract_text,
         "languages": sorted(set(m.lower() for m in matches)),
         "mentions_language": len(matches) > 0,
-        "extraction_case": extraction_case
+        "extraction_case": extraction_case,
+        "layout_detected": layout_detected
     })
 
 # -------------------
 # Save results
 # -------------------
 df = pd.DataFrame(papers_data)
-out_file = "AllVenues_LanguagePapers25.csv"
+out_file = "AllVenues_LanguagePapers.csv"
 df.to_csv(out_file, index=False)
-
-# Save missing fulltext records with reasons
-if fulltext_missing_records:
-    pd.DataFrame(fulltext_missing_records).to_csv("fulltext_missing25.csv", index=False)
-    print(f"Saved {len(fulltext_missing_records)} fulltext-missing records to fulltext_missing25.csv")
 
 print(f"\nSaved results to {out_file}")
 print(f"Papers mentioning languages: {df['mentions_language'].sum()} / {len(df)}")
@@ -347,7 +354,7 @@ print(f"Papers mentioning languages: {df['mentions_language'].sum()} / {len(df)}
 print("\nSummary stats:")
 for venue, s in stats.items():
     print(f"{venue:<10} papers={s['papers']:<6} "
-          f"missing_abs(meta)={s['missing_abs']:<6} "
+          f"missing_abs={s['missing_abs']:<6} "
           f"no_abs_keyword={s['no_abstract_keyword_found']:<6} "
           f"empty_text={s['empty_text_extraction']:<6} "
           f"missing_id={s['missing_id']:<6} "
