@@ -2,7 +2,7 @@
 ### Python Scripts
 
 *   `dashboard.py`: The main Streamlit application that provides an interactive dashboard for exploring language resource distribution and taxonomy comparisons. This dashboard includes visualizations of language clusters based on resource counts and comparisons between different taxonomies.
-*   `convert_tags_to_names.py`: This script probably handles the conversion of ISO 639-3 codes to full language names.
+*   `convert_tags_to_names.py`: This script handles the conversion of ISO 639-3 codes to full language names.
 *   `scrape_ldc_catalogs.py`: This script is designed to scrape data from LDC (Linguistic Data Consortium) catalogs to gather information about available linguistic resources.
 *   `lang2tax_MED.py`: This script was used in an attempt to standardise language names in Joshi et al's (2020) taxonomy using Minimum Edit Distance (MED) approach.
 
@@ -15,3 +15,6 @@
 *   `taxonomy_original_tags.csv`: Contains the taxonomyfor for 333 languages with resources, using ISO tags and their assigned clusters.
 *   `DatasetsPerLanguage.xlsx`: Contains detailed information about data processing and language name standardisation.
 *   `lang2tax_MED_suggestions.txt`: Results of the unsuccessful attempt to standardide languge names from the Joshi et al.'s (2020) taxonomy using MED.
+*   `iso-639-3-macrolanguages.tab`: A file containing information about ISO 639-3 macrolanguages and the languages that constitute them.
+*   `languagecodes.csv`: A list of ISO 639-3 tags and full language names.
+*   `language_codes_ISO639-3_with_macros.csv`: A list of ISO 639-3 tags with macrolanguages replacing individual languages whenever they are given.
