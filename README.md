@@ -1,16 +1,17 @@
 # Revisiting Joshi et al. (2020): Methodological Gaps in Language Representation Analysis
 
-This repository contains code and data for a critical reassessment of Joshi et al. (2020)'s influential analysis of language resource distribution in NLP research, accepted to [KONVENS 2025](https://www.inf.uni-hamburg.de/en/inst/ab/lt/konvens2025/) in Hamburg.
+This repository contains code and data for a critical reassessment of Joshi et al. (2020)'s influential analysis of language resource distribution in NLP research, accepted to [KONVENS 2026](https://www.inf.uni-hamburg.de/en/inst/ab/lt/konvens2026/) in Hamburg.
 
 ## Citation
 
 ```bibtex
-@inproceedings{kuznetcova_spirgath2025revisiting,
+@inproceedings{kuznetcova_spirgath2026revisiting,
   title={Revisiting {J}oshi et al. (2020): Methodological Gaps in the Analysis of Language Resource Distribution and {NLP} Conference Inclusion},
   author={Kuznetcova, Polina and Spirgath, Annika},
-  booktitle={Proceedings of KONVENS 2025},
-  year={2025},
-  address={Hamburg, Germany}
+  booktitle={Proceedings of KONVENS 2026},
+  year={2026},
+  address={Hamburg, Germany},
+  note={Accepted}
 }
 ```
 
@@ -35,7 +36,7 @@ This work identifies and addresses five key methodological limitations:
   - Reproducible pipeline for 2024 data across 10 major NLP venues
   - See [conference_inclusion/README.md](conference_inclusion/README.md)
 
-- **`Revisiting_Joshi_et_al_2020.pdf`** — Full paper accepted to KONVENS 2025
+- **`Revisiting_Joshi_et_al_2020.pdf`** — Full paper accepted to KONVENS 2026
 
 
 ## References
