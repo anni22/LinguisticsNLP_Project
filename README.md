@@ -1,4 +1,4 @@
-# Revisiting Joshi et al. (2020): Methodological Gaps in Language Representation Analysis
+# Revisiting Joshi et al. (2020): Methodological Gaps in the Analysis of Language Resource Distribution and NLP Conference Inclusion
 
 This repository contains code and data for a critical reassessment of Joshi et al. (2020)'s influential analysis of language resource distribution in NLP research, accepted to [KONVENS 2026](https://www.inf.uni-hamburg.de/en/inst/ab/lt/konvens2026/) in Hamburg.
 
